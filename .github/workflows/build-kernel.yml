@@ -61,7 +61,7 @@ jobs:
         export GCCDIR64=$GITHUB_WORKSPACE/toolchain/gcc64
         export GCCDIR32=$GITHUB_WORKSPACE/toolchain/gcc32
         export PATH=$CLANGDIR/bin:$GCCDIR64/bin:$GCCDIR32/bin:$PATH
-        export CLANG_TRIPLE=aarch64-linux-android-
+        export CLANG_TRIPLE=aarch64-linux-gnu-
         export CROSS_COMPILE=aarch64-linux-android-
         export CROSS_COMPILE_ARM32=arm-linux-androideabi-
 
