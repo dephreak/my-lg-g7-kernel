@@ -35,49 +35,46 @@ jobs:
       run: |
         mkdir -p $GITHUB_WORKSPACE/toolchain
         cd $GITHUB_WORKSPACE/toolchain
-
-        # Clang
-        git clone https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r416183b \
-          -b lineage-20.0 clang --depth=1
-
-        # GCC (aarch64 and arm32)
+        git clone https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r450784d \
+          -b lineage-22.1 clang --depth=1
         git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 \
           -b lineage-19.1 gcc64 --depth=1
         git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 \
           -b lineage-19.1 gcc32 --depth=1
 
-     - name: Clone SukiSU (optional)
+    - name: Clone SukiSU (optional)
       run: |
         cd kernel
         curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
         curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-main
-        # Follow SukiSU integration steps here
-        # cp -r sukisu/kernel_patches/* kernel/
         cd ..
 
-    - name: Build kernel
+     - name: Build kernel
       run: |
         cd kernel
-
         export ARCH=arm64
         export SUBARCH=arm64
-
         export CLANGDIR=$GITHUB_WORKSPACE/toolchain/clang
         export GCCDIR64=$GITHUB_WORKSPACE/toolchain/gcc64
         export GCCDIR32=$GITHUB_WORKSPACE/toolchain/gcc32
-
         export PATH=$CLANGDIR/bin:$GCCDIR64/bin:$GCCDIR32/bin:$PATH
-        export CLANG_TRIPLE=aarch64-linux-gnu-
+        export CLANG_TRIPLE=aarch64-linux-android-
         export CROSS_COMPILE=aarch64-linux-android-
         export CROSS_COMPILE_ARM32=arm-linux-androideabi-
 
-        # Defconfig for LG G7 Canadian variant
         make O=out judyln_lao_com-perf_defconfig
 
-        # Disable EFI stub (to avoid undefined __efistub_ symbols)
-        scripts/config --file out/.config --disable EFI --disable EFI_STUB
-        make O=out olddefconfig
+        # Add your custom configs here
+        scripts/config --file out/.config --enable KPM
+        scripts/config --file out/.config --enable KALLSYMS
+        scripts/config --file out/.config --enable KALLSYMS_ALL
 
+        # Disable EFI, still
+        scripts/config --file out/.config --disable EFI --disable EFI_STUB || true
+
+        # Regenerate configuration
+        make O=out olddefconfig
+        
         # Build
         make -j$(nproc) O=out ARCH=arm64 LLVM=1
 
