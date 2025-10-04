@@ -39,7 +39,7 @@ jobs:
         
     - name: Clone SukiSU (optional)
       run: |
-        git clone https://github.com/SukiSU-Ultra/SukiSU-Ultra sukisu
+        #git clone https://github.com/SukiSU-Ultra/SukiSU-Ultra sukisu
         # Follow SukiSU integration steps here
         # cp -r sukisu/kernel_patches/* kernel/
         
