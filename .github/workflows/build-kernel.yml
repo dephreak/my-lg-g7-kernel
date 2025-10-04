@@ -16,7 +16,7 @@ jobs:
       uses: actions/checkout@v3
       with:
         repository: LineageOS/android_kernel_lge_sdm845
-        ref: lineage-21.0 # LineageOS 21 (Android 14) - use lineage-20.0 for Android 13
+        ref: lineage-20.0 # Change to your branch
         path: kernel
         
     - name: Setup build environment
@@ -54,7 +54,7 @@ jobs:
         export CC=clang
         export CLANG_TRIPLE=aarch64-linux-gnu-
         
-        # Configure for Canadian G7 (G710AWM/ULM)
+        # Configure
         make O=out judyln_lao_com-perf_defconfig
         
         # Build
@@ -85,3 +85,4 @@ jobs:
         files: release/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+	
