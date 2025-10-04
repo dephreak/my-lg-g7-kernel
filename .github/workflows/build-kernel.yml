@@ -45,12 +45,15 @@ jobs:
           -b lineage-19.1 gcc32 --depth=1
 
 
-    - name: Clone SukiSU (optional)
+    - name: Clone and integrate SukiSU
       run: |
         cd kernel
         curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
         curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-main
-        cd ..
+        # Integrate susfs sources
+        git clone https://gitlab.com/simonpunk/susfs4ksu.git susfs4ksu --depth=1
+        cp -r susfs4ksu/kernel_patches/include/linux/susfs.h include/linux/
+        cp -r susfs4ksu/kernel_patches/fs/susfs fs/
         
     - name: Build kernel
       run: |
