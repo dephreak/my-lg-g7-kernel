@@ -56,12 +56,11 @@ jobs:
         cd kernel
         export ARCH=arm64
         export SUBARCH=arm64
-        export CLANG_PATH=/toolchain/bin
-        
-        export CROSS_COMPILE=/toolchain/gcc-arm64/bin/aarch64-linux-android-
-        export CROSS_COMPILE_ARM32=/toolchain/gcc-arm/bin/arm-linux-androideabi-
-        export CC64_PATH=/toolchain/gcc-arm64/bin
-        export CC32_PATH=/toolchain/gcc-arm/bin/
+        export CLANG_PATH=/toolchain/android_prebuilts_clang_kernel_linux-x86_clang-r416183b/bin
+        export CROSS_COMPILE=/toolchain/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9/bin/aarch64-linux-android-
+        export CROSS_COMPILE_ARM32=/toolchain/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9/bin/arm-linux-androideabi-
+        export CC64_PATH=/toolchain/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9/bin
+        export CC32_PATH=/toolchain/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9/bin/
         export PATH=$CLANG_PATH:$CC64_PATH:$CC32_PATH:$PATH
         export CLANG_TRIPLE=aarch64-linux-gnu-
         
