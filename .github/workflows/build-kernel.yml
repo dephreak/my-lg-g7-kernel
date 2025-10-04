@@ -32,23 +32,17 @@ jobs:
           python-is-python3 openjdk-11-jdk
           
     - name: Download toolchains
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         mkdir -p $GITHUB_WORKSPACE/toolchain
         cd $GITHUB_WORKSPACE/toolchain
-
         # Clang
-        git clone https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r450784d.git \
-          -b lineage-22.1 clang --depth=1 || \
-          git clone https://${GITHUB_TOKEN}@github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r450784d.git \
-          -b lineage-22.1 clang --depth=1
-
+        git clone https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r416183b \
+          -b lineage-20.0 clang --depth=1
         # GCC (aarch64 and arm32)
-        git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git \
-          -b lineage-19.1 gcc64 --depth=1 || true
-        git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git \
-          -b lineage-19.1 gcc32 --depth=1 || true
+        git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 \
+          -b lineage-19.1 gcc64 --depth=1
+        git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 \
+          -b lineage-19.1 gcc32 --depth=1
 
 
     - name: Clone SukiSU (optional)
