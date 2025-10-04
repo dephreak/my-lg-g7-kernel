@@ -5,7 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch: # Allows manual trigger
+  workflow_dispatch:  # Allows manual trigger
 
 jobs:
   build:
@@ -13,10 +13,10 @@ jobs:
     
     steps:
     - name: Checkout kernel source
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         repository: LineageOS/android_kernel_lge_sdm845
-        ref: lineage-20.0 # Change to your branch
+        ref: lineage-21.0  # LineageOS 21 (Android 14) - use lineage-20.0 for Android 13
         path: kernel
         
     - name: Setup build environment
@@ -54,7 +54,7 @@ jobs:
         export CC=clang
         export CLANG_TRIPLE=aarch64-linux-gnu-
         
-        # Configure
+        # Configure for Canadian G7 (G710AWM/ULM)
         make O=out judyln_lao_com-perf_defconfig
         
         # Build
@@ -73,16 +73,15 @@ jobs:
         cp Image $GITHUB_WORKSPACE/release/ 2>/dev/null || true
         
     - name: Upload kernel artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: kernel-build-${{ github.sha }}
         path: release/*
         
     - name: Create Release (on tag)
       if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: release/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-	
