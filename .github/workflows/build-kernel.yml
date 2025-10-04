@@ -23,8 +23,18 @@ jobs:
     - name: Setup build environment
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential bc bison flex libssl-dev \
-          libelf-dev git wget curl python3 zip unzip
+       sudo apt install bc bison build-essential ccache curl flex g++-multilib \
+   gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev \
+   lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev \
+   libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush \
+   rsync schedtool squashfs-tools xsltproc zip zlib1g-dev unzip \
+   python3 python-is-python3 openjdk-11-jdk -y
+
+   wget https://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2_amd64.deb && sudo dpkg -i libtinfo5_6.3-2_amd64.deb && rm -f libtinfo5_6.3-2_amd64.deb
+wget https://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libncurses5_6.3-2_amd64.deb && sudo dpkg -i libncurses5_6.3-2_amd64.deb && rm -f libncurses5_6.3-2_amd64.deb
+
+
+          
         
     - name: Download toolchain
       run: |
@@ -59,7 +69,7 @@ jobs:
         
         # Build
         make -j$(nproc) O=out \
-          CC=clang \
+          ARCH=arm64 LLVM=1 \
           CLANG_TRIPLE=aarch64-linux-gnu- \
           CROSS_COMPILE=aarch64-linux-android- \
           CROSS_COMPILE_ARM32=arm-linux-androideabi-
