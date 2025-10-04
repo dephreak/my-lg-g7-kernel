@@ -30,17 +30,26 @@ jobs:
           libxml2 libxml2-utils lzop pngcrush rsync schedtool \
           squashfs-tools xsltproc zip zlib1g-dev unzip python3 \
           python-is-python3 openjdk-11-jdk
-
+          
     - name: Download toolchains
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         mkdir -p $GITHUB_WORKSPACE/toolchain
         cd $GITHUB_WORKSPACE/toolchain
-        git clone https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r450784d \
+
+        # Clang
+        git clone https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r450784d.git \
+          -b lineage-22.1 clang --depth=1 || \
+          git clone https://${GITHUB_TOKEN}@github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r450784d.git \
           -b lineage-22.1 clang --depth=1
-        git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 \
-          -b lineage-19.1 gcc64 --depth=1
-        git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 \
-          -b lineage-19.1 gcc32 --depth=1
+
+        # GCC (aarch64 and arm32)
+        git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git \
+          -b lineage-19.1 gcc64 --depth=1 || true
+        git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git \
+          -b lineage-19.1 gcc32 --depth=1 || true
+
 
     - name: Clone SukiSU (optional)
       run: |
