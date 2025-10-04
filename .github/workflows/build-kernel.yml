@@ -46,6 +46,15 @@ jobs:
         git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 \
           -b lineage-19.1 gcc32 --depth=1
 
+     - name: Clone SukiSU (optional)
+      run: |
+        cd kernel
+        curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
+        curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-main
+        # Follow SukiSU integration steps here
+        # cp -r sukisu/kernel_patches/* kernel/
+        cd ..
+
     - name: Build kernel
       run: |
         cd kernel
