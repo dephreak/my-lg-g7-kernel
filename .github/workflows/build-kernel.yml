@@ -45,6 +45,8 @@ jobs:
       - name: 🧩 Integrate SukiSU and SUSFS (kernel_4.9)
         run: |
           cd kernel
+          export KERNEL_ROOT=$GITHUB_WORKSPACE/kernel
+          
 
           echo "=== 🔧 Integrating SukiSU ==="
           curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
@@ -57,8 +59,15 @@ jobs:
 
           if [ -d "susfs4ksu/kernel_patches" ]; then
             echo "→ Copying SUSFS headers and source files"
-            cp -v susfs4ksu/kernel_patches/include/linux/susfs*.h include/linux/
-            cp -rv susfs4ksu/kernel_patches/fs/susfs fs/
+            cp ./kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch $KERNEL_ROOT/KernelSU/
+            cp ./kernel_patches/50_add_susfs_in_kernel-4.9.patch $KERNEL_ROOT/
+            cp ./kernel_patches/fs/* $KERNEL_ROOT/fs/
+            cp ./kernel_patches/include/linux/* $KERNEL_ROOT/include/linux/
+            cd $KERNEL_ROOT/KernelSU
+            patch -p1 < 10_enable_susfs_for_ksu.patch
+            cd $KERNEL_ROOT
+            patch -p1 < 50_add_susfs_in_kernel.patch
+            
             echo "✅ SUSFS source integration complete"
           else
             echo "❌ SUSFS source not found or invalid structure"
@@ -81,16 +90,20 @@ jobs:
           scripts/config --file out/.config --enable MODULE_UNLOAD
           scripts/config --file out/.config --enable OVERLAY_FS
           scripts/config --file out/.config --enable CONFIG_SUSFS || true
+          scripts/config --file out/.config --enable KSU_SUSFS_HAS_MAGIC_MOUNT || true
 
           # Disable problematic options
           scripts/config --file out/.config --disable EFI
           scripts/config --file out/.config --disable EFI_STUB
           scripts/config --file out/.config --disable RANDOMIZE_BASE
+          
+          echo "=== Final config summary:"
+          grep -E "CONFIG_KPM|CONFIG_KALLSYMS|CONFIG_SUSFS|KSU_SUSFS_HAS_MAGIC_MOUNT " out/.config || true
+          
 
           make O=out olddefconfig
 
-          echo "=== Final config summary:"
-          grep -E "CONFIG_KPM|CONFIG_KALLSYMS|CONFIG_SUSFS" out/.config || true
+          
 
       - name: 🧱 Build kernel
         run: |
@@ -133,4 +146,3 @@ jobs:
         with:
           name: build-log-${{ github.run_number }}
           path: kernel/build.log
-
