@@ -60,45 +60,73 @@ jobs:
       run: |
         cd kernel
         
-        # Patch fs/exec.c for KernelSU hooks
-        # For 4.x kernels, we need to manually add the hooks
+        # Check if fs/exec.c exists and what kernel version we have
+        echo "=== Checking kernel version ==="
+        grep "Linux kernel release" Makefile || head -5 Makefile
         
-        cat >> fs/exec.c << 'EOF'
-        
-        #ifdef CONFIG_KSU
-        extern bool ksu_execveat_hook __read_mostly;
-        extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,
-                        void *envp, int *flags);
-        extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
-                        void *argv, void *envp, int *flags);
-        #endif
-        EOF
-        
-        # Find the do_execveat_common function and add hook
-        # This is a simplified approach - you may need to adjust for your kernel version
-        sed -i '/static int do_execveat_common/,/^{/a\
+        # Add KSU hook declarations at the top of fs/exec.c
+        sed -i '1i\
         #ifdef CONFIG_KSU\
-                if (unlikely(ksu_execveat_hook))\
-                        ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);\
-                ksu_handle_execveat_sucompat(&fd, &filename, &argv, &envp, &flags);\
-        #endif
-        ' fs/exec.c || echo "Warning: Could not automatically patch exec.c"
+        extern bool ksu_execveat_hook __read_mostly;\
+        extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv, void *envp, int *flags);\
+        extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr, void *argv, void *envp, int *flags);\
+        #endif\
+        ' fs/exec.c
         
-        # Add input hook for key combinations (optional but recommended)
-        cat >> drivers/input/input.c << 'EOF'
+        # Find and patch do_execveat_common - insert INSIDE the function body
+        # Look for the opening brace after the function declaration
+        awk '
+        /^static int do_execveat_common\(/ {
+          print; 
+          getline; print;  # print next line (parameters)
+          while (getline) {
+            print;
+            if (/^{$/) {  # found opening brace
+              print "#ifdef CONFIG_KSU";
+              print "\tif (unlikely(ksu_execveat_hook))";
+              print "\t\tksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);";
+              print "\tksu_handle_execveat_sucompat(&fd, &filename, &argv, &envp, &flags);";
+              print "#endif";
+              break;
+            }
+          }
+          next;
+        }
+        { print }
+        ' fs/exec.c > fs/exec.c.tmp && mv fs/exec.c.tmp fs/exec.c
         
-        #ifdef CONFIG_KSU
-        extern bool ksu_input_hook __read_mostly;
-        extern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);
-        #endif
-        EOF
+        echo "=== Patched fs/exec.c ==="
+        grep -A 10 "do_execveat_common" fs/exec.c | head -20
         
-        sed -i '/static void input_handle_event/,/^{/a\
+        # Add input hook declarations
+        sed -i '1i\
         #ifdef CONFIG_KSU\
-                if (unlikely(ksu_input_hook))\
-                        ksu_handle_input_handle_event(&type, &code, &value);\
-        #endif
-        ' drivers/input/input.c || echo "Warning: Could not automatically patch input.c"
+        extern bool ksu_input_hook __read_mostly;\
+        extern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);\
+        #endif\
+        ' drivers/input/input.c
+        
+        # Patch input_handle_event
+        awk '
+        /^static void input_handle_event\(/ {
+          print;
+          getline; print;  # print parameters
+          while (getline) {
+            print;
+            if (/^{$/) {  # found opening brace
+              print "#ifdef CONFIG_KSU";
+              print "\tif (unlikely(ksu_input_hook))";
+              print "\t\tksu_handle_input_handle_event(&type, &code, &value);";
+              print "#endif";
+              break;
+            }
+          }
+          next;
+        }
+        { print }
+        ' drivers/input/input.c > drivers/input/input.c.tmp && mv drivers/input/input.c.tmp drivers/input/input.c
+        
+        echo "=== Manual hooks applied ===" 
         
     - name: Integrate SukiSU (Non-GKI Compatible)
       run: |
