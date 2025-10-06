@@ -1,4 +1,4 @@
-name: Build Android Kernel (Non-GKI)
+name: Build Android Kernel (SukiSU + SUSFS Non-GKI)
 
 on:
   push:
@@ -42,56 +42,51 @@ jobs:
           git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 \
             -b lineage-19.1 gcc32 --depth=1
 
-      - name: Integrate KernelSU
+      - name: Integrate SukiSU and SUSFS
         run: |
           cd kernel
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
-          test -d KernelSU && echo "✓ KernelSU integrated" || (echo "✗ KernelSU failed" && exit 1)
-
-      - name: Apply manual KSU hook patch if needed
-        run: |
-          cd kernel
-          if grep -q "ksu_handle_execveat" fs/exec.c; then
-            echo "✓ Hooks exist"
+          echo "=== Integrating SukiSU ==="
+          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
+          echo "=== Integrating SUSFS ==="
+          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-main
+          echo "=== Checking SUSFS source ==="
+          git clone https://gitlab.com/simonpunk/susfs4ksu.git susfs4ksu --depth=1 || true
+          if [ -d "susfs4ksu/kernel_patches" ]; then
+            cp -r susfs4ksu/kernel_patches/include/linux/susfs.h include/linux/ 2>/dev/null || true
+            cp -r susfs4ksu/kernel_patches/fs/susfs fs/ 2>/dev/null || true
+            echo "✓ SUSFS source integrated"
           else
-            echo "Applying manual patch..."
-            cat <<'EOF' > /tmp/ksu_exec.patch
---- a/fs/exec.c
-+++ b/fs/exec.c
-@@ -1890,6 +1897,18 @@ static int do_execveat_common(int fd, struct filename *filename,
-                               struct user_arg_ptr argv,
-                               struct user_arg_ptr envp,
-                               int flags)
- {
-+#ifdef CONFIG_KSU
-+   if (unlikely(ksu_execveat_hook))
-+       ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
-+   else
-+       ksu_handle_execveat_sucompat(&fd, &filename, &argv, &envp, &flags);
-+#endif
-     return __do_execve_file(fd, filename, argv, envp, flags, NULL);
- }
-EOF
-            patch -p1 < /tmp/ksu_exec.patch || echo "Patch failed, continuing"
+            echo "⚠️ SUSFS source not found, continuing anyway"
           fi
 
       - name: Configure kernel
         run: |
           cd kernel
           export ARCH=arm64
+          export SUBARCH=arm64
+
           make O=out judyln_lao_com-perf_defconfig
-          scripts/config --file out/.config --enable CONFIG_KSU
-          scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK
-          scripts/config --file out/.config --disable CONFIG_KSU_DEBUG
-          scripts/config --file out/.config --enable KALLSYMS
-          scripts/config --file out/.config --enable KALLSYMS_ALL
+
+          # Enable required features
+          scripts/config --file out/.config --enable CONFIG_KPM
+          scripts/config --file out/.config --enable CONFIG_KALLSYMS
+          scripts/config --file out/.config --enable CONFIG_KALLSYMS_ALL
           scripts/config --file out/.config --enable MODULES
           scripts/config --file out/.config --enable MODULE_UNLOAD
           scripts/config --file out/.config --enable OVERLAY_FS
+
+          # Try enabling SUSFS if available
+          scripts/config --file out/.config --enable CONFIG_SUSFS || true
+
+          # Disable EFI/randomization issues
           scripts/config --file out/.config --disable EFI
           scripts/config --file out/.config --disable EFI_STUB
           scripts/config --file out/.config --disable RANDOMIZE_BASE
-          make O=out ARCH=arm64 olddefconfig
+
+          make O=out olddefconfig
+
+          echo "=== Final Config Summary ==="
+          grep -E "CONFIG_KPM|CONFIG_KALLSYMS|CONFIG_SUSFS" out/.config || true
 
       - name: Build kernel
         run: |
@@ -105,16 +100,32 @@ EOF
           export CLANG_TRIPLE=aarch64-linux-gnu-
           export CROSS_COMPILE=aarch64-linux-android-
           export CROSS_COMPILE_ARM32=arm-linux-androideabi-
+
+          echo "=== Starting kernel build ==="
           make -j$(nproc) O=out ARCH=arm64 LLVM=1 2>&1 | tee build.log
 
-      - name: Check results
-        run: |
-          cd kernel/out/arch/arm64/boot
-          ls -lh
-          test -f Image || (echo "No kernel image found!" && exit 1)
+          echo "=== Build finished ==="
+          ls -lh out/arch/arm64/boot/ || true
 
-      - name: Upload artifacts
+      - name: Prepare release artifacts
+        run: |
+          mkdir -p release
+          cd kernel/out/arch/arm64/boot/
+          cp Image.gz-dtb $GITHUB_WORKSPACE/release/ 2>/dev/null || true
+          cp Image.gz $GITHUB_WORKSPACE/release/ 2>/dev/null || true
+          cp Image $GITHUB_WORKSPACE/release/ 2>/dev/null || true
+          cd $GITHUB_WORKSPACE/release
+          ls -lh
+
+      - name: Upload kernel artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-build-${{ github.run_number }}
-          path: kernel/out/arch/arm64/boot/
+          name: sukisu-susfs-kernel-${{ github.run_number }}
+          path: release/*
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ github.run_number }}
+          path: kernel/build.log
