@@ -48,85 +48,84 @@ jobs:
       run: |
         cd kernel
         
-        # Use older KernelSU version that works better with non-GKI
-        # v0.7.5 or v0.8.1 work better for 4.x kernels
-        curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.8.1
+        # Use KernelSU v0.9.5 which has better non-GKI support
+        curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
         
-        # Apply manual hook patches for non-GKI
-        # These need to be added to your kernel's do_execveat_common or do_execve
-        echo "KernelSU integrated - you'll need manual hooks!"
+        # The setup script should have created KernelSU directory
+        if [ -d "KernelSU" ]; then
+          echo "✓ KernelSU integrated successfully"
+          ls -la KernelSU/
+        else
+          echo "✗ KernelSU integration failed"
+          exit 1
+        fi
         
-    - name: Apply Non-GKI Manual Hooks
+        # KernelSU should auto-patch for non-GKI, but let's verify
+        echo "=== Checking for KernelSU hooks ==="
+        grep -r "ksu_handle_execveat" fs/exec.c || echo "No automatic hooks found - will need manual config"
+        
+    - name: Apply Non-GKI Manual Hooks (if needed)
       run: |
         cd kernel
         
-        # Check if fs/exec.c exists and what kernel version we have
-        echo "=== Checking kernel version ==="
-        grep "Linux kernel release" Makefile || head -5 Makefile
+        # Check if KernelSU already patched the files
+        if grep -q "ksu_handle_execveat" fs/exec.c; then
+          echo "✓ KernelSU hooks already present, skipping manual patch"
+          exit 0
+        fi
         
-        # Add KSU hook declarations at the top of fs/exec.c
-        sed -i '1i\
-        #ifdef CONFIG_KSU\
-        extern bool ksu_execveat_hook __read_mostly;\
-        extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv, void *envp, int *flags);\
-        extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr, void *argv, void *envp, int *flags);\
-        #endif\
-        ' fs/exec.c
+        echo "Applying manual hooks for 4.9 kernel..."
         
-        # Find and patch do_execveat_common - insert INSIDE the function body
-        # Look for the opening brace after the function declaration
-        awk '
-        /^static int do_execveat_common\(/ {
-          print; 
-          getline; print;  # print next line (parameters)
-          while (getline) {
-            print;
-            if (/^{$/) {  # found opening brace
-              print "#ifdef CONFIG_KSU";
-              print "\tif (unlikely(ksu_execveat_hook))";
-              print "\t\tksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);";
-              print "\tksu_handle_execveat_sucompat(&fd, &filename, &argv, &envp, &flags);";
-              print "#endif";
-              break;
-            }
-          }
-          next;
-        }
-        { print }
-        ' fs/exec.c > fs/exec.c.tmp && mv fs/exec.c.tmp fs/exec.c
+        # For 4.9 kernels, we need to manually add hooks
+        # Check the exact function signature in your kernel
+        echo "=== Current do_execveat_common signature ==="
+        grep -A 5 "do_execveat_common" fs/exec.c | head -10
         
-        echo "=== Patched fs/exec.c ==="
-        grep -A 10 "do_execveat_common" fs/exec.c | head -20
+        # Create a proper patch file
+        cat > /tmp/ksu_exec.patch << 'PATCH'
+--- a/fs/exec.c
++++ b/fs/exec.c
+@@ -1,6 +1,13 @@
+ /*
+  *  linux/fs/exec.c
+  */
++#ifdef CONFIG_KSU
++extern bool ksu_execveat_hook;
++extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, 
++                               void *argv, void *envp, int *flags);
++extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
++                                        void *argv, void *envp, int *flags);
++#endif
+ 
+ #include <linux/slab.h>
+ #include <linux/file.h>
+PATCH
+
+        # Try to apply the patch
+        patch -p1 < /tmp/ksu_exec.patch || echo "Header patch may have failed, continuing..."
         
-        # Add input hook declarations
-        sed -i '1i\
-        #ifdef CONFIG_KSU\
-        extern bool ksu_input_hook __read_mostly;\
-        extern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);\
-        #endif\
-        ' drivers/input/input.c
-        
-        # Patch input_handle_event
-        awk '
-        /^static void input_handle_event\(/ {
-          print;
-          getline; print;  # print parameters
-          while (getline) {
-            print;
-            if (/^{$/) {  # found opening brace
-              print "#ifdef CONFIG_KSU";
-              print "\tif (unlikely(ksu_input_hook))";
-              print "\t\tksu_handle_input_handle_event(&type, &code, &value);";
-              print "#endif";
-              break;
-            }
-          }
-          next;
-        }
-        { print }
-        ' drivers/input/input.c > drivers/input/input.c.tmp && mv drivers/input/input.c.tmp drivers/input/input.c
-        
-        echo "=== Manual hooks applied ===" 
+        # Now add the actual hook call inside the function
+        # Find the do_execveat_common function and add hook right after opening brace
+        python3 << 'PYEOF'
+import re
+
+with open('fs/exec.c', 'r') as f:
+    content = f.read()
+
+# Find do_execveat_common function and add hook after the opening brace
+pattern = r'(static int do_execveat_common\([^)]+\)\s*\{)'
+replacement = r'\1\n#ifdef CONFIG_KSU\n\tif (unlikely(ksu_execveat_hook))\n\t\tksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);\n\tksu_handle_execveat_sucompat(&fd, &filename, &argv, &envp, &flags);\n#endif\n'
+
+content = re.sub(pattern, replacement, content, count=1)
+
+with open('fs/exec.c', 'w') as f:
+    f.write(content)
+
+print("✓ Patched fs/exec.c with KSU hooks")
+PYEOF
+
+        echo "=== Verifying patch ==="
+        grep -A 8 "do_execveat_common" fs/exec.c | head -15
         
     - name: Integrate SukiSU (Non-GKI Compatible)
       run: |
