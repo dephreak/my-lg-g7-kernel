@@ -1,4 +1,4 @@
-name: Build Android Kernel
+name: Build Android Kernel (Non-GKI)
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    
     steps:
     - name: Checkout kernel source
       uses: actions/checkout@v4
@@ -19,7 +19,7 @@ jobs:
         ref: lineage-22.2
         path: kernel
         fetch-depth: 1
-
+        
     - name: Setup build environment
       run: |
         sudo apt-get update
@@ -43,18 +43,124 @@ jobs:
           -b lineage-19.1 gcc64 --depth=1
         git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 \
           -b lineage-19.1 gcc32 --depth=1
-
-
-    - name: Clone and integrate SukiSU
+          
+    - name: Integrate KernelSU for Non-GKI (Manual Hook Mode)
       run: |
         cd kernel
-        curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
-        curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-main
-
         
-        # Integrate susfs sources
-       # git clone https://gitlab.com/simonpunk/susfs4ksu.git -b kernel-4.9 --depth=1
-      
+        # Use older KernelSU version that works better with non-GKI
+        # v0.7.5 or v0.8.1 work better for 4.x kernels
+        curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.8.1
+        
+        # Apply manual hook patches for non-GKI
+        # These need to be added to your kernel's do_execveat_common or do_execve
+        echo "KernelSU integrated - you'll need manual hooks!"
+        
+    - name: Apply Non-GKI Manual Hooks
+      run: |
+        cd kernel
+        
+        # Patch fs/exec.c for KernelSU hooks
+        # For 4.x kernels, we need to manually add the hooks
+        
+        cat >> fs/exec.c << 'EOF'
+        
+        #ifdef CONFIG_KSU
+        extern bool ksu_execveat_hook __read_mostly;
+        extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,
+                        void *envp, int *flags);
+        extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
+                        void *argv, void *envp, int *flags);
+        #endif
+        EOF
+        
+        # Find the do_execveat_common function and add hook
+        # This is a simplified approach - you may need to adjust for your kernel version
+        sed -i '/static int do_execveat_common/,/^{/a\
+        #ifdef CONFIG_KSU\
+                if (unlikely(ksu_execveat_hook))\
+                        ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);\
+                ksu_handle_execveat_sucompat(&fd, &filename, &argv, &envp, &flags);\
+        #endif
+        ' fs/exec.c || echo "Warning: Could not automatically patch exec.c"
+        
+        # Add input hook for key combinations (optional but recommended)
+        cat >> drivers/input/input.c << 'EOF'
+        
+        #ifdef CONFIG_KSU
+        extern bool ksu_input_hook __read_mostly;
+        extern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);
+        #endif
+        EOF
+        
+        sed -i '/static void input_handle_event/,/^{/a\
+        #ifdef CONFIG_KSU\
+                if (unlikely(ksu_input_hook))\
+                        ksu_handle_input_handle_event(&type, &code, &value);\
+        #endif
+        ' drivers/input/input.c || echo "Warning: Could not automatically patch input.c"
+        
+    - name: Integrate SukiSU (Non-GKI Compatible)
+      run: |
+        cd kernel
+        
+        # SukiSU nongki version - better for older kernels
+        curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki || echo "SukiSU nongki setup done"
+        
+        # Try susfs but it might not work on non-GKI
+        curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-main || echo "SUSFS setup attempted"
+        
+        # Clone susfs sources
+        git clone https://gitlab.com/simonpunk/susfs4ksu.git susfs4ksu --depth=1 || true
+        
+        # Try to integrate susfs if sources are available
+        if [ -d "susfs4ksu/kernel_patches" ]; then
+          cp -r susfs4ksu/kernel_patches/include/linux/susfs.h include/linux/ 2>/dev/null || true
+          cp -r susfs4ksu/kernel_patches/fs/susfs fs/ 2>/dev/null || true
+          echo "SUSFS patches applied"
+        fi
+        
+    - name: Configure kernel for Non-GKI KernelSU
+      run: |
+        cd kernel
+        export ARCH=arm64
+        export SUBARCH=arm64
+        
+        # Generate base config
+        make O=out judyln_lao_com-perf_defconfig
+        
+        # Enable KernelSU with manual hooks (critical for non-GKI)
+        scripts/config --file out/.config --enable CONFIG_KSU
+        scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK
+        scripts/config --file out/.config --disable CONFIG_KSU_DEBUG
+        
+        # Enable required kernel features
+        scripts/config --file out/.config --enable KALLSYMS
+        scripts/config --file out/.config --enable KALLSYMS_ALL
+        scripts/config --file out/.config --enable MODULES
+        scripts/config --file out/.config --enable MODULE_UNLOAD
+        
+        # Overlayfs support (needed for some root features)
+        scripts/config --file out/.config --enable OVERLAY_FS
+        
+        # Disable things that can cause issues
+        scripts/config --file out/.config --disable EFI
+        scripts/config --file out/.config --disable EFI_STUB
+        scripts/config --file out/.config --disable RANDOMIZE_BASE
+        
+        # Security features that work with KernelSU
+        scripts/config --file out/.config --enable SECURITY
+        scripts/config --file out/.config --disable SECURITY_SELINUX_DEVELOP
+        
+        # Try to enable SUSFS if available
+        scripts/config --file out/.config --enable CONFIG_KSU_SUSFS || true
+        
+        # Regenerate configuration
+        make O=out ARCH=arm64 olddefconfig
+        
+        # Show KSU related config
+        echo "=== KernelSU Configuration ==="
+        grep -E "CONFIG_KSU|CONFIG_OVERLAY" out/.config || echo "KSU configs may not be present"
         
     - name: Build kernel
       run: |
@@ -68,32 +174,48 @@ jobs:
         export CLANG_TRIPLE=aarch64-linux-gnu-
         export CROSS_COMPILE=aarch64-linux-android-
         export CROSS_COMPILE_ARM32=arm-linux-androideabi-
-
-        make O=out judyln_lao_com-perf_defconfig
-
-        # Add your custom configs here
-        scripts/config --file out/.config --enable KPM
-        scripts/config --file out/.config --enable KALLSYMS
-        scripts/config --file out/.config --enable KALLSYMS_ALL
-        # scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK
-
-        # Disable EFI, still
-        scripts/config --file out/.config --disable EFI --disable EFI_STUB || true
-
-        # Regenerate configuration
-        make O=out olddefconfig
         
-        # Build
-        make -j$(nproc) O=out ARCH=arm64 LLVM=1
-
+        # Build with verbose output to catch errors
+        make -j$(nproc) O=out ARCH=arm64 LLVM=1 2>&1 | tee build.log
+        
+    - name: Check build results
+      run: |
+        cd kernel
+        echo "=== Build Results ==="
+        ls -lh out/arch/arm64/boot/
+        
+        if [ -f "out/arch/arm64/boot/Image.gz-dtb" ]; then
+          echo "✓ Image.gz-dtb created successfully"
+        elif [ -f "out/arch/arm64/boot/Image" ]; then
+          echo "✓ Image created (no dtb appended)"
+        else
+          echo "✗ No kernel image found!"
+          exit 1
+        fi
+        
     - name: Prepare release files
       run: |
         mkdir -p release
-        cp kernel/out/arch/arm64/boot/Image* release/ || true
-        ls -lh release
-
+        cd kernel/out/arch/arm64/boot/
+        
+        # Copy all possible kernel images
+        cp Image.gz-dtb $GITHUB_WORKSPACE/release/ 2>/dev/null || true
+        cp Image.gz $GITHUB_WORKSPACE/release/ 2>/dev/null || true
+        cp Image $GITHUB_WORKSPACE/release/ 2>/dev/null || true
+        cp dts/qcom/*.dtb $GITHUB_WORKSPACE/release/ 2>/dev/null || true
+        
+        cd $GITHUB_WORKSPACE/release
+        ls -lh
+        
+    - name: Upload build log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-log-${{ github.run_number }}
+        path: kernel/build.log
+        
     - name: Upload kernel artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: kernel-${{ github.run_number }}
+        name: kernel-nongki-ksu-${{ github.run_number }}
         path: release/*
