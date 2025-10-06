@@ -55,7 +55,7 @@ jobs:
             echo "✓ Hooks exist"
           else
             echo "Applying manual patch..."
-            cat > /tmp/ksu_exec.patch <<EOF
+            cat <<'EOF' > /tmp/ksu_exec.patch
 --- a/fs/exec.c
 +++ b/fs/exec.c
 @@ -1890,6 +1897,18 @@ static int do_execveat_common(int fd, struct filename *filename,
