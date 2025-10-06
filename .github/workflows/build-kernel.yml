@@ -50,10 +50,11 @@ jobs:
         cd kernel
         curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
         curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-main
+
+        
         # Integrate susfs sources
-        git clone https://gitlab.com/simonpunk/susfs4ksu.git susfs4ksu --depth=1
-        cp -r susfs4ksu/kernel_patches/include/linux/susfs.h include/linux/
-        cp -r susfs4ksu/kernel_patches/fs/susfs fs/
+       # git clone https://gitlab.com/simonpunk/susfs4ksu.git -b kernel-4.9 --depth=1
+      
         
     - name: Build kernel
       run: |
@@ -74,6 +75,7 @@ jobs:
         scripts/config --file out/.config --enable KPM
         scripts/config --file out/.config --enable KALLSYMS
         scripts/config --file out/.config --enable KALLSYMS_ALL
+        # scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK
 
         # Disable EFI, still
         scripts/config --file out/.config --disable EFI --disable EFI_STUB || true
