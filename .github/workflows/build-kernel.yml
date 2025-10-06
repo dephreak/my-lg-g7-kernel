@@ -22,7 +22,6 @@ jobs:
 
       - name: Setup build environment
         run: |
-          echo "=== Setting up build environment ==="
           sudo apt-get update
           sudo apt-get install -y \
             bc bison build-essential ccache curl flex g++-multilib \
@@ -34,10 +33,8 @@ jobs:
 
       - name: Download toolchains
         run: |
-          echo "=== Downloading toolchains ==="
           mkdir -p $GITHUB_WORKSPACE/toolchain
           cd $GITHUB_WORKSPACE/toolchain
-
           git clone https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r416183b \
             -b lineage-20.0 clang --depth=1
           git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 \
@@ -45,34 +42,20 @@ jobs:
           git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 \
             -b lineage-19.1 gcc32 --depth=1
 
-      - name: Integrate KernelSU for Non-GKI (Manual Hook Mode)
+      - name: Integrate KernelSU
         run: |
-          echo "=== Integrating KernelSU ==="
           cd kernel
-
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
+          test -d KernelSU && echo "✓ KernelSU integrated" || (echo "✗ KernelSU failed" && exit 1)
 
-          if [ -d "KernelSU" ]; then
-            echo "✓ KernelSU integrated successfully"
-          else
-            echo "✗ KernelSU integration failed"
-            exit 1
-          fi
-
-          echo "=== Checking for KernelSU hooks ==="
-          grep -r "ksu_handle_execveat" fs/exec.c || echo "No automatic hooks found - will need manual config"
-
-      - name: Apply Non-GKI Manual Hooks (if needed)
+      - name: Apply manual KSU hook patch if needed
         run: |
-          echo "=== Checking/patching fs/exec.c ==="
           cd kernel
-
           if grep -q "ksu_handle_execveat" fs/exec.c; then
-            echo "✓ KernelSU hooks already present, continuing..."
+            echo "✓ Hooks exist"
           else
-            echo "Applying manual KernelSU hooks for 4.9 kernel..."
-
-            cat > /tmp/ksu_exec.patch <<'PATCH'
+            echo "Applying manual patch..."
+            cat > /tmp/ksu_exec.patch <<EOF
 --- a/fs/exec.c
 +++ b/fs/exec.c
 @@ -1890,6 +1897,18 @@ static int do_execveat_common(int fd, struct filename *filename,
@@ -88,59 +71,50 @@ jobs:
 +#endif
      return __do_execve_file(fd, filename, argv, envp, flags, NULL);
  }
-PATCH
-
-            patch -p1 < /tmp/ksu_exec.patch || echo "⚠ Patch failed, continuing anyway"
+EOF
+            patch -p1 < /tmp/ksu_exec.patch || echo "Patch failed, continuing"
           fi
 
-          echo "=== Verifying hooks ==="
-          grep -A 10 "do_execveat_common" fs/exec.c | head -20
-
-      - name: Integrate SukiSU (Non-GKI Compatible)
+      - name: Configure kernel
         run: |
-          echo "=== Integrating SukiSU ==="
-          cd kernel
-
-          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki || echo "SukiSU nongki setup done"
-          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-main || echo "SUSFS setup attempted"
-
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git susfs4ksu --depth=1 || true
-
-          if [ -d "susfs4ksu/kernel_patches" ]; then
-            cp -r susfs4ksu/kernel_patches/include/linux/susfs.h include/linux/ 2>/dev/null || true
-            cp -r susfs4ksu/kernel_patches/fs/susfs fs/ 2>/dev/null || true
-            echo "✓ SUSFS patches integrated"
-          fi
-
-      - name: Configure kernel for Non-GKI KernelSU
-        run: |
-          echo "=== Configuring kernel ==="
           cd kernel
           export ARCH=arm64
-          export SUBARCH=arm64
-
           make O=out judyln_lao_com-perf_defconfig
-
           scripts/config --file out/.config --enable CONFIG_KSU
           scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK
           scripts/config --file out/.config --disable CONFIG_KSU_DEBUG
-
           scripts/config --file out/.config --enable KALLSYMS
           scripts/config --file out/.config --enable KALLSYMS_ALL
           scripts/config --file out/.config --enable MODULES
           scripts/config --file out/.config --enable MODULE_UNLOAD
           scripts/config --file out/.config --enable OVERLAY_FS
-
           scripts/config --file out/.config --disable EFI
           scripts/config --file out/.config --disable EFI_STUB
           scripts/config --file out/.config --disable RANDOMIZE_BASE
-
-          scripts/config --file out/.config --enable SECURITY
-          scripts/config --file out/.config --disable SECURITY_SELINUX_DEVELOP
-
-          scripts/config --file out/.config --enable CONFIG_KSU_SUSFS || true
-
           make O=out ARCH=arm64 olddefconfig
 
-          echo "=== KernelSU Config ==="
-          grep -E "CONFIG_KSU|CONFIG_OVERLAY" out/.config || true
+      - name: Build kernel
+        run: |
+          cd kernel
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export CLANGDIR=$GITHUB_WORKSPACE/toolchain/clang
+          export GCCDIR64=$GITHUB_WORKSPACE/toolchain/gcc64
+          export GCCDIR32=$GITHUB_WORKSPACE/toolchain/gcc32
+          export PATH=$CLANGDIR/bin:$GCCDIR64/bin:$GCCDIR32/bin:$PATH
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+          export CROSS_COMPILE=aarch64-linux-android-
+          export CROSS_COMPILE_ARM32=arm-linux-androideabi-
+          make -j$(nproc) O=out ARCH=arm64 LLVM=1 2>&1 | tee build.log
+
+      - name: Check results
+        run: |
+          cd kernel/out/arch/arm64/boot
+          ls -lh
+          test -f Image || (echo "No kernel image found!" && exit 1)
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-build-${{ github.run_number }}
+          path: kernel/out/arch/arm64/boot/
