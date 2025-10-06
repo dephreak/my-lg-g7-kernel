@@ -202,8 +202,23 @@ PYEOF
         export CROSS_COMPILE=aarch64-linux-android-
         export CROSS_COMPILE_ARM32=arm-linux-androideabi-
         
-        # Build with verbose output to catch errors
+        echo "=== Starting kernel build ==="
+        echo "Build started at: $(date)"
+        
+        # Build with verbose output and error catching
+        set -e  # Exit on any error
         make -j$(nproc) O=out ARCH=arm64 LLVM=1 2>&1 | tee build.log
+        
+        echo "=== Build completed at: $(date) ==="
+        
+        # Verify build succeeded
+        if [ $? -ne 0 ]; then
+          echo "✗ Build failed!"
+          tail -100 build.log
+          exit 1
+        fi
+        
+        echo "✓ Build completed successfully"
         
     - name: Check build results
       run: |
