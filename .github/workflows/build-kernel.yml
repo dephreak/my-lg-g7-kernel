@@ -59,10 +59,10 @@ jobs:
 
           if [ -d "susfs4ksu/kernel_patches" ]; then
             echo "→ Copying SUSFS headers and source files"
-            cp ./kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch $KERNEL_ROOT/KernelSU/
-            cp ./kernel_patches/50_add_susfs_in_kernel-4.9.patch $KERNEL_ROOT/
-            cp ./kernel_patches/fs/* $KERNEL_ROOT/fs/
-            cp ./kernel_patches/include/linux/* $KERNEL_ROOT/include/linux/
+            cp ./susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch $KERNEL_ROOT/KernelSU/
+            cp ./susfs4ksu/kernel_patches/50_add_susfs_in_kernel-4.9.patch $KERNEL_ROOT/
+            cp ./susfs4ksu/kernel_patches/fs/* $KERNEL_ROOT/fs/
+            cp ./susfs4ksu/kernel_patches/include/linux/* $KERNEL_ROOT/include/linux/
             cd $KERNEL_ROOT/KernelSU
             patch -p1 < 10_enable_susfs_for_ksu.patch
             cd $KERNEL_ROOT
