@@ -42,37 +42,37 @@ jobs:
           git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 \
             -b lineage-19.1 gcc32 --depth=1
 
-      - name: 🧩 Integrate SukiSU and SUSFS (kernel_4.9)
-        run: |
-          cd kernel
-          export KERNEL_ROOT=$GITHUB_WORKSPACE/kernel
+      #- name: 🧩 Integrate SukiSU and SUSFS (kernel_4.9)
+      #  run: |
+       #   cd kernel
+       #   export KERNEL_ROOT=$GITHUB_WORKSPACE/kernel
           
 
-          echo "=== 🔧 Integrating SukiSU ==="
-          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
+        #  echo "=== 🔧 Integrating SukiSU ==="
+        #  curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s nongki
 
-          echo "=== 🔧 Integrating SUSFS ==="
-          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-main
+         # echo "=== 🔧 Integrating SUSFS ==="
+         # curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-main
 
-          echo "=== 📥 Cloning SUSFS source for 4.9 kernel ==="
-          git clone -b kernel-4.9 https://gitlab.com/simonpunk/susfs4ksu.git susfs4ksu --depth=1
+       #   echo "=== 📥 Cloning SUSFS source for 4.9 kernel ==="
+       #   git clone -b kernel-4.9 https://gitlab.com/simonpunk/susfs4ksu.git susfs4ksu --depth=1
 
-          if [ -d "susfs4ksu/kernel_patches" ]; then
-            echo "→ Copying SUSFS headers and source files"
-            cp ./susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch $KERNEL_ROOT/KernelSU/
-            cp ./susfs4ksu/kernel_patches/50_add_susfs_in_kernel-4.9.patch $KERNEL_ROOT/
-            cp ./susfs4ksu/kernel_patches/fs/* $KERNEL_ROOT/fs/
-            cp ./susfs4ksu/kernel_patches/include/linux/* $KERNEL_ROOT/include/linux/
-            cd $KERNEL_ROOT/KernelSU
-            patch -p1 < 10_enable_susfs_for_ksu.patch
-            cd $KERNEL_ROOT
-            patch -p1 < 50_add_susfs_in_kernel.patch
+       #   if [ -d "susfs4ksu/kernel_patches" ]; then
+        #    echo "→ Copying SUSFS headers and source files"
+       #     cp ./susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch $KERNEL_ROOT/KernelSU/
+       #     cp ./susfs4ksu/kernel_patches/50_add_susfs_in_kernel-4.9.patch $KERNEL_ROOT/
+        #    cp ./susfs4ksu/kernel_patches/fs/* $KERNEL_ROOT/fs/
+        #    cp ./susfs4ksu/kernel_patches/include/linux/* $KERNEL_ROOT/include/linux/
+       #     cd $KERNEL_ROOT/KernelSU
+        #    patch -p1 < 10_enable_susfs_for_ksu.patch
+        #    cd $KERNEL_ROOT
+        #    patch -p1 < 50_add_susfs_in_kernel.patch
             
-            echo "✅ SUSFS source integration complete"
-          else
-            echo "❌ SUSFS source not found or invalid structure"
-            exit 1
-          fi
+       #     echo "✅ SUSFS source integration complete"
+        #  else
+        #    echo "❌ SUSFS source not found or invalid structure"
+       #     exit 1
+      #    fi
 
       - name: 🧪 Configure kernel
         run: |
@@ -83,14 +83,14 @@ jobs:
           make O=out judyln_lao_com-perf_defconfig
 
           # Enable essential options
-          scripts/config --file out/.config --enable CONFIG_KPM
-          scripts/config --file out/.config --enable CONFIG_KALLSYMS
-          scripts/config --file out/.config --enable CONFIG_KALLSYMS_ALL
-          scripts/config --file out/.config --enable MODULES
-          scripts/config --file out/.config --enable MODULE_UNLOAD
-          scripts/config --file out/.config --enable OVERLAY_FS
-          scripts/config --file out/.config --enable CONFIG_SUSFS || true
-          scripts/config --file out/.config --enable KSU_SUSFS_HAS_MAGIC_MOUNT || true
+          #   scripts/config --file out/.config --enable CONFIG_KPM
+          #   scripts/config --file out/.config --enable CONFIG_KALLSYMS
+          #   scripts/config --file out/.config --enable CONFIG_KALLSYMS_ALL
+          #   scripts/config --file out/.config --enable MODULES
+          #    scripts/config --file out/.config --enable MODULE_UNLOAD
+          #   scripts/config --file out/.config --enable OVERLAY_FS
+          #   scripts/config --file out/.config --enable CONFIG_SUSFS || true
+          #    scripts/config --file out/.config --enable KSU_SUSFS_HAS_MAGIC_MOUNT || true
 
           # Disable problematic options
           scripts/config --file out/.config --disable EFI
@@ -98,7 +98,7 @@ jobs:
           scripts/config --file out/.config --disable RANDOMIZE_BASE
           
           echo "=== Final config summary:"
-          grep -E "CONFIG_KPM|CONFIG_KALLSYMS|CONFIG_SUSFS|KSU_SUSFS_HAS_MAGIC_MOUNT " out/.config || true
+           #    grep -E "CONFIG_KPM|CONFIG_KALLSYMS|CONFIG_SUSFS|KSU_SUSFS_HAS_MAGIC_MOUNT " out/.config || true
           
 
           make O=out olddefconfig
